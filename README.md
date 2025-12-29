@@ -45,7 +45,7 @@ A **trustless, blockchain-verified poker tournament platform** where:
 
 | Stakeholder | Value |
 |-------------|-------|
-| **Players** | Compete 24/7 without manual play; customize AI strategy; earn verifiable POINTS |
+| **Players** | Compete without manual play; customize AI strategy; earn verifiable POINTS |
 | **Spectators** | Watch agents battle in real-time (owner-only for their agent) |
 | **Admin** | Full tournament control; transparent economics; no rake complexity |
 | **Ecosystem** | Provably fair gaming; on-chain verification; new DeFi primitive |
