@@ -1,0 +1,88 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: poker_arena_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'backend/requirements.txt'
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff pytest pytest-asyncio pytest-cov
+
+      - name: Lint with ruff
+        working-directory: backend
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Run tests
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/poker_arena_test
+          REDIS_URL: redis://localhost:6379
+          ENVIRONMENT: test
+          SOLANA_RPC_URL: https://api.devnet.solana.com
+          PROGRAM_ID: 34MhwbaRczNA8Zt4H8rUwPV4o2MsAtYd8hQhNno3QaLN
+          ADMIN_WALLET_PUBKEY: BNa6ccCgyxkuVmjRpv1h64Hd6nWnnNNKZvmXKbwY1u4m
+          TREASURY_WALLET_PUBKEY: CR6Uxh1R3bkvfgB2qma5C7x4JNkWH1mxBERoEmmGrfrm
+          ANTHROPIC_API_KEY: sk-ant-test
+          ANTHROPIC_MODEL: claude-sonnet-4-5-20250929
+          SECRET_KEY: test-secret-key
+        run: |
+          pytest tests/ -v --cov=. --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: backend/coverage.xml
+          flags: backend
+          fail_ci_if_error: false

@@ -1,0 +1,19 @@
+[features]
+seeds = false
+skip-lint = false
+
+[programs.devnet]
+poker_arena = "E6tuNWDutZ7Npsb6UU6GmV5H4B3ucpAwzzGeqJzrUUJz"
+
+[programs.localnet]
+poker_arena = "E6tuNWDutZ7Npsb6UU6GmV5H4B3ucpAwzzGeqJzrUUJz"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
