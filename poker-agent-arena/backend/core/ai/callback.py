@@ -6,7 +6,10 @@ with the tournament manager.
 
 from typing import Dict, Optional, Callable, Awaitable, List
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from .engine import AIDecisionEngine, AgentConfig
+from .context_builder import AgentSliders
 from ..poker.betting import Action
 from ..poker.hand_controller import HandState, HandController
 
@@ -247,3 +250,92 @@ class TournamentAIIntegration:
             AgentConfig or None
         """
         return self.agent_configs.get(wallet)
+
+
+class LiveSettingsAIIntegration(TournamentAIIntegration):
+    """AI integration with live settings support.
+
+    Extends TournamentAIIntegration to support dynamic slider updates
+    during tournament play. Live settings are cached and can be refreshed
+    at the start of each hand.
+    """
+
+    def __init__(
+        self,
+        ai_engine: AIDecisionEngine,
+        tournament_id: str,
+        agent_configs: Dict[str, AgentConfig],
+        player_tiers: Dict[str, str],
+        custom_prompts: Dict[str, str],
+    ):
+        """Initialize live settings AI integration.
+
+        Args:
+            ai_engine: AI decision engine
+            tournament_id: Tournament identifier
+            agent_configs: Initial map of wallet -> AgentConfig
+            player_tiers: Map of wallet -> tier (free, basic, pro)
+            custom_prompts: Map of wallet -> custom prompt text (PRO tier only)
+        """
+        super().__init__(ai_engine, tournament_id, agent_configs)
+        self.player_tiers = player_tiers
+        self.custom_prompts = custom_prompts
+        # Cache of live settings (wallet -> (aggression, tightness))
+        self._live_settings_cache: Dict[str, tuple[int, int]] = {}
+
+    def update_live_settings(
+        self,
+        wallet: str,
+        aggression: int,
+        tightness: int,
+    ) -> None:
+        """Update cached live settings for a player.
+
+        This is called when a player's confirmed settings are applied
+        at the start of a new hand.
+
+        Args:
+            wallet: Player wallet
+            aggression: New aggression value (1-10)
+            tightness: New tightness value (1-10)
+        """
+        self._live_settings_cache[wallet] = (aggression, tightness)
+
+        # Update the agent config to use new settings
+        tier = self.player_tiers.get(wallet, "free")
+        custom_text = self.custom_prompts.get(wallet, "")
+
+        self.agent_configs[wallet] = AgentConfig.from_live_settings(
+            wallet=wallet,
+            tier=tier,
+            aggression=aggression,
+            tightness=tightness,
+            custom_text=custom_text,
+        )
+
+    def initialize_live_settings(
+        self,
+        settings: Dict[str, tuple[int, int]],
+    ) -> None:
+        """Initialize live settings cache from database.
+
+        Called at tournament start to populate settings for all players.
+
+        Args:
+            settings: Map of wallet -> (aggression, tightness)
+        """
+        for wallet, (aggression, tightness) in settings.items():
+            self.update_live_settings(wallet, aggression, tightness)
+
+    def get_live_settings(self, wallet: str) -> tuple[int, int]:
+        """Get current live settings for a player.
+
+        Returns default (5, 5) if not cached.
+
+        Args:
+            wallet: Player wallet
+
+        Returns:
+            Tuple of (aggression, tightness)
+        """
+        return self._live_settings_cache.get(wallet, (5, 5))

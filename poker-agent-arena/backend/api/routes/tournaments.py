@@ -274,21 +274,14 @@ async def register_for_tournament(
     # Validate agent config based on tier
     agent = request.agent
 
-    if tier == "free":
-        # Free tier: no sliders or custom prompt allowed
-        if agent.sliders or agent.custom_prompt:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Free tier does not support sliders or custom prompts",
-            )
-    elif tier == "basic":
-        # Basic tier: sliders allowed, no custom prompt
-        if agent.custom_prompt:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Basic tier does not support custom prompts",
-            )
-    # Pro tier: everything allowed
+    # Custom prompts only allowed for PRO tier
+    if tier in ("free", "basic") and agent.custom_prompt:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{tier.upper()} tier does not support custom prompts. Custom prompts are PRO tier only.",
+        )
+    # Note: Sliders are now controlled via live settings during the tournament,
+    # not at registration time. BASIC and PRO tiers get slider access during live play.
 
     # Build prompt for hashing
     prompt_content = ""
@@ -312,14 +305,16 @@ async def register_for_tournament(
             encrypted_prompt = prompt_content  # Store plaintext in dev
 
     # Insert registration
+    # Note: agent_sliders is deprecated - sliders are now managed via agent_live_settings
+    # table during live tournament play for BASIC/PRO tiers
     result = await db.execute(
         text("""
             INSERT INTO registrations (
                 tournament_id, wallet, tier, agent_name, agent_image_uri,
-                agent_sliders, agent_prompt_encrypted, agent_prompt_hash
+                agent_prompt_encrypted, agent_prompt_hash
             ) VALUES (
                 :tournament_id, :wallet, :tier, :agent_name, :agent_image_uri,
-                :agent_sliders, :agent_prompt_encrypted, :agent_prompt_hash
+                :agent_prompt_encrypted, :agent_prompt_hash
             )
             RETURNING id, registered_at
         """),
@@ -329,7 +324,6 @@ async def register_for_tournament(
             "tier": tier,
             "agent_name": agent.name,
             "agent_image_uri": agent.image_uri,
-            "agent_sliders": json.dumps(agent.sliders.model_dump()) if agent.sliders else None,
             "agent_prompt_encrypted": encrypted_prompt,
             "agent_prompt_hash": prompt_hash,
         },

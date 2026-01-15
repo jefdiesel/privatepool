@@ -41,7 +41,11 @@ class Decision:
 
 @dataclass
 class AgentConfig:
-    """Configuration for a poker agent."""
+    """Configuration for a poker agent.
+
+    For BASIC/PRO tiers, sliders are fetched from live settings at decision time.
+    The custom_text is only used for PRO tier and is fetched from registration.
+    """
     wallet: str
     tier: AgentTier = AgentTier.FREE
     sliders: AgentSliders = None  # type: ignore
@@ -52,6 +56,34 @@ class AgentConfig:
             self.sliders = AgentSliders()
         if isinstance(self.tier, str):
             self.tier = AgentTier(self.tier.upper())
+
+    @classmethod
+    def from_live_settings(
+        cls,
+        wallet: str,
+        tier: str,
+        aggression: int,
+        tightness: int,
+        custom_text: str = "",
+    ) -> "AgentConfig":
+        """Create AgentConfig from live settings.
+
+        Args:
+            wallet: Player wallet address
+            tier: Agent tier (FREE, BASIC, PRO)
+            aggression: Live aggression setting (1-10)
+            tightness: Live tightness setting (1-10)
+            custom_text: Custom prompt text (PRO tier only)
+
+        Returns:
+            AgentConfig with live slider values
+        """
+        return cls(
+            wallet=wallet,
+            tier=AgentTier(tier.upper()),
+            sliders=AgentSliders(aggression=aggression, tightness=tightness),
+            custom_text=custom_text,
+        )
 
 
 class AIDecisionEngine:

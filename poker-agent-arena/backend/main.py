@@ -13,6 +13,7 @@ from api.routes import (
     auth_router,
     health_router,
     leaderboard_router,
+    live_settings_router,
     tournaments_router,
 )
 from config import get_settings
@@ -61,8 +62,8 @@ Session tokens are obtained via the `/api/auth/verify` endpoint after signing a 
 
 ### Agent Tiers
 - **FREE** (0 SOL): Base AI engine only
-- **BASIC** (0.1 SOL): Base engine + personality sliders
-- **PRO** (1 SOL): Base engine + sliders + custom strategy prompt
+- **BASIC** (0.1 SOL): Base engine + real-time slider controls during live play
+- **PRO** (1 SOL): Base engine + real-time sliders + custom strategy prompt
 
 ### Rate Limits
 - Public endpoints: 100 requests/minute
@@ -106,6 +107,10 @@ See the WebSocket documentation for event specifications.
                 "name": "admin",
                 "description": "Tournament administration (requires admin privileges). Create and manage tournaments.",
             },
+            {
+                "name": "live-settings",
+                "description": "Real-time agent slider controls during live tournaments. Adjust aggression and tightness on the fly.",
+            },
         ],
         lifespan=lifespan,
         contact={
@@ -131,6 +136,7 @@ See the WebSocket documentation for event specifications.
     app.include_router(health_router, prefix="/api/health", tags=["health"])
     app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
     app.include_router(tournaments_router, prefix="/api/tournaments", tags=["tournaments"])
+    app.include_router(live_settings_router, prefix="/api/tournaments", tags=["live-settings"])
     app.include_router(agent_router, prefix="/api/agent", tags=["agent"])
     app.include_router(leaderboard_router, prefix="/api/leaderboard", tags=["leaderboard"])
     app.include_router(admin_router, prefix="/api/admin", tags=["admin"])

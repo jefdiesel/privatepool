@@ -34,12 +34,14 @@ class PayoutEntry(BaseModel):
 
 
 class AgentSliders(BaseModel):
-    """Agent strategy sliders (0-100)."""
+    """Agent strategy sliders (1-10 scale).
 
-    aggression: int = Field(50, ge=0, le=100)
-    bluff_frequency: int = Field(30, ge=0, le=100)
-    tightness: int = Field(50, ge=0, le=100)
-    position_awareness: int = Field(70, ge=0, le=100)
+    - aggression: 1 = passive (check/call), 10 = aggressive (bet/raise)
+    - tightness: 1 = loose (many hands), 10 = tight (selective)
+    """
+
+    aggression: int = Field(5, ge=1, le=10)
+    tightness: int = Field(5, ge=1, le=10)
 
 
 class AgentConfig(BaseModel):
@@ -47,8 +49,31 @@ class AgentConfig(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=32)
     image_uri: str | None = Field(None, max_length=256)
-    sliders: AgentSliders | None = None
     custom_prompt: str | None = Field(None, max_length=2000)
+
+
+class LiveSettingsResponse(BaseModel):
+    """Response for live settings endpoint."""
+
+    tournament_id: str
+    wallet: str
+    # Active settings (currently used by agent)
+    active_aggression: int = Field(5, ge=1, le=10)
+    active_tightness: int = Field(5, ge=1, le=10)
+    # Pending settings (slider position, not yet confirmed)
+    pending_aggression: int | None = None
+    pending_tightness: int | None = None
+    # Confirmed settings (waiting for next hand)
+    confirmed_aggression: int | None = None
+    confirmed_tightness: int | None = None
+    confirmed_at: str | None = None
+
+
+class UpdateLiveSettingsRequest(BaseModel):
+    """Request to update pending slider values."""
+
+    aggression: int = Field(..., ge=1, le=10)
+    tightness: int = Field(..., ge=1, le=10)
 
 
 class TournamentListItem(BaseModel):
@@ -152,7 +177,6 @@ class UpdateAgentRequest(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=32)
     image_uri: str | None = Field(None, max_length=256)
-    sliders: AgentSliders | None = None
     custom_prompt: str | None = Field(None, max_length=2000)
 
 

@@ -14,6 +14,16 @@ interface MyAgent {
   holeCards?: string[];
 }
 
+interface LiveSettings {
+  activeAggression: number;
+  activeTightness: number;
+  pendingAggression: number | null;
+  pendingTightness: number | null;
+  confirmedAggression: number | null;
+  confirmedTightness: number | null;
+  confirmedAt: string | null;
+}
+
 interface TournamentState {
   // Current tournament
   currentTournament: TournamentDetail | null;
@@ -23,6 +33,9 @@ interface TournamentState {
 
   // My agent info
   myAgent: MyAgent | null;
+
+  // Live settings for slider controls (BASIC/PRO tiers only)
+  liveSettings: LiveSettings | null;
 
   // Current blind level
   blindLevel: {
@@ -46,6 +59,10 @@ interface TournamentState {
   removeTable: (tableId: string) => void;
   setMyAgent: (agent: MyAgent | null) => void;
   updateMyAgent: (updates: Partial<MyAgent>) => void;
+  setLiveSettings: (settings: LiveSettings | null) => void;
+  updatePendingSettings: (aggression: number, tightness: number) => void;
+  confirmSettings: (aggression: number, tightness: number) => void;
+  applySettings: (aggression: number, tightness: number) => void;
   setBlindLevel: (level: number, smallBlind: number, bigBlind: number, ante: number) => void;
   addElimination: (wallet: string, position: number, eliminatorWallet: string | null) => void;
   reset: () => void;
@@ -55,6 +72,7 @@ const initialState = {
   currentTournament: null,
   tables: {},
   myAgent: null,
+  liveSettings: null,
   blindLevel: null,
   eliminations: [],
 };
@@ -82,6 +100,48 @@ export const useTournamentStore = create<TournamentState>((set) => ({
   updateMyAgent: (updates) =>
     set((prev) => ({
       myAgent: prev.myAgent ? { ...prev.myAgent, ...updates } : null,
+    })),
+
+  setLiveSettings: (settings) =>
+    set({ liveSettings: settings }),
+
+  updatePendingSettings: (aggression, tightness) =>
+    set((prev) => ({
+      liveSettings: prev.liveSettings
+        ? {
+            ...prev.liveSettings,
+            pendingAggression: aggression,
+            pendingTightness: tightness,
+          }
+        : null,
+    })),
+
+  confirmSettings: (aggression, tightness) =>
+    set((prev) => ({
+      liveSettings: prev.liveSettings
+        ? {
+            ...prev.liveSettings,
+            pendingAggression: null,
+            pendingTightness: null,
+            confirmedAggression: aggression,
+            confirmedTightness: tightness,
+            confirmedAt: new Date().toISOString(),
+          }
+        : null,
+    })),
+
+  applySettings: (aggression, tightness) =>
+    set((prev) => ({
+      liveSettings: prev.liveSettings
+        ? {
+            ...prev.liveSettings,
+            activeAggression: aggression,
+            activeTightness: tightness,
+            confirmedAggression: null,
+            confirmedTightness: null,
+            confirmedAt: null,
+          }
+        : null,
     })),
 
   setBlindLevel: (level, smallBlind, bigBlind, ante) =>
@@ -116,3 +176,6 @@ export const selectActivePlayers = (state: TournamentState, tableId: string): nu
   if (!table) return 0;
   return table.seats.filter((s) => s.status === 'active' || s.status === 'all_in').length;
 };
+
+// Export types
+export type { LiveSettings };

@@ -5,6 +5,7 @@ from api.routes.agent import router as agent_router
 from api.routes.auth import router as auth_router
 from api.routes.health import router as health_router
 from api.routes.leaderboard import router as leaderboard_router
+from api.routes.live_settings import router as live_settings_router
 from api.routes.tournaments import router as tournaments_router
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "agent_router",
     "leaderboard_router",
     "admin_router",
+    "live_settings_router",
 ]

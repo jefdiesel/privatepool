@@ -440,6 +440,18 @@ async def begin_tournament(
             },
         )
 
+        # Initialize live settings for BASIC and PRO tier players
+        await db.execute(
+            text("""
+                INSERT INTO agent_live_settings (tournament_id, wallet)
+                SELECT :tournament_id, wallet
+                FROM registrations
+                WHERE tournament_id = :tournament_id AND tier IN ('basic', 'pro')
+                ON CONFLICT (tournament_id, wallet) DO NOTHING
+            """),
+            {"tournament_id": str(tournament_id)},
+        )
+
         logger.info(f"Tournament {tournament_id} started: {signature}")
 
         return BeginTournamentResponse(

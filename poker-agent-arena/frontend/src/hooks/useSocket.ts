@@ -81,6 +81,12 @@ export function useSocket(options: UseSocketOptions = {}) {
       onDecisionStart: (data) => {
         callbacksRef.current?.onDecisionStart?.(data);
       },
+      onSettingsConfirmed: (data) => {
+        callbacksRef.current?.onSettingsConfirmed?.(data);
+      },
+      onSettingsApplied: (data) => {
+        callbacksRef.current?.onSettingsApplied?.(data);
+      },
     });
   }, []);
 

@@ -6,10 +6,12 @@ import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useSocket } from "@/hooks/useSocket";
 import { useTournament } from "@/hooks/useTournament";
-import { useTournamentStore } from "@/stores/tournamentStore";
+import { useTournamentStore, LiveSettings } from "@/stores/tournamentStore";
 import { useWalletStore } from "@/stores/walletStore";
 import { PokerTable } from "@/components/poker/PokerTable";
+import SettingsPanel from "@/components/SettingsPanel";
 import { TableState } from "@/lib/socket";
+import { api } from "@/lib/api";
 
 export default function LiveTournamentPage() {
   const params = useParams();
@@ -21,11 +23,15 @@ export default function LiveTournamentPage() {
   const {
     tables,
     myAgent,
+    liveSettings,
     blindLevel,
     eliminations,
     setTournament,
     updateTableState,
     setMyAgent,
+    setLiveSettings,
+    confirmSettings,
+    applySettings,
     setBlindLevel,
     addElimination,
     reset,
@@ -35,6 +41,7 @@ export default function LiveTournamentPage() {
   const [actionOnWallet, setActionOnWallet] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [notifications, setNotifications] = useState<string[]>([]);
+  const [settingsLoading, setSettingsLoading] = useState(true);
 
   const addNotification = useCallback((message: string) => {
     setNotifications((prev) => [...prev.slice(-4), message]);
@@ -129,6 +136,14 @@ export default function LiveTournamentPage() {
         setActionOnWallet(null);
         setTimeRemaining(null);
       },
+      onSettingsConfirmed: (event) => {
+        confirmSettings(event.aggression, event.tightness);
+        addNotification("Settings confirmed - will apply next hand");
+      },
+      onSettingsApplied: (event) => {
+        applySettings(event.aggression, event.tightness);
+        addNotification("New settings are now active");
+      },
     },
   });
 
@@ -156,6 +171,76 @@ export default function LiveTournamentPage() {
     }
     return () => reset();
   }, [tournament, setTournament, reset]);
+
+  // Fetch live settings for BASIC/PRO tier users
+  useEffect(() => {
+    async function fetchLiveSettings() {
+      if (!tournament || !isAuthenticated) {
+        setSettingsLoading(false);
+        return;
+      }
+
+      // Check if user has slider access (BASIC or PRO tier)
+      const userTier = tournament.user_tier?.toLowerCase();
+      if (!userTier || userTier === "free") {
+        setSettingsLoading(false);
+        setLiveSettings(null);
+        return;
+      }
+
+      try {
+        const response = await api.liveSettings.get(tournamentId);
+        setLiveSettings({
+          activeAggression: response.active_aggression,
+          activeTightness: response.active_tightness,
+          pendingAggression: response.pending_aggression,
+          pendingTightness: response.pending_tightness,
+          confirmedAggression: response.confirmed_aggression,
+          confirmedTightness: response.confirmed_tightness,
+          confirmedAt: response.confirmed_at,
+        });
+      } catch (error) {
+        console.error("Failed to fetch live settings:", error);
+        // Initialize with defaults if fetch fails but user has access
+        setLiveSettings({
+          activeAggression: 5,
+          activeTightness: 5,
+          pendingAggression: null,
+          pendingTightness: null,
+          confirmedAggression: null,
+          confirmedTightness: null,
+          confirmedAt: null,
+        });
+      } finally {
+        setSettingsLoading(false);
+      }
+    }
+
+    fetchLiveSettings();
+  }, [tournament, tournamentId, isAuthenticated, setLiveSettings]);
+
+  // Handlers for settings panel
+  const handleSettingsUpdate = useCallback(
+    async (aggression: number, tightness: number) => {
+      await api.liveSettings.update(tournamentId, aggression, tightness);
+      // Update local state optimistically
+      setLiveSettings(
+        liveSettings
+          ? {
+              ...liveSettings,
+              pendingAggression: aggression,
+              pendingTightness: tightness,
+            }
+          : null
+      );
+    },
+    [tournamentId, liveSettings, setLiveSettings]
+  );
+
+  const handleSettingsConfirm = useCallback(async () => {
+    await api.liveSettings.confirm(tournamentId);
+    // The socket event will update the state
+  }, [tournamentId]);
 
   const currentTable = currentTableId ? tables[currentTableId] : null;
   const myWallet = publicKey?.toBase58();
@@ -305,6 +390,32 @@ export default function LiveTournamentPage() {
                   Table: {myAgent.tableId.slice(0, 8)}...
                 </p>
                 <p className="text-slate-400 text-sm">Seat: {myAgent.seatPosition + 1}</p>
+              </div>
+            )}
+
+            {/* Live Settings Panel (BASIC/PRO only) */}
+            {tournament?.user_tier &&
+              tournament.user_tier.toLowerCase() !== "free" &&
+              liveSettings && (
+                <SettingsPanel
+                  settings={liveSettings}
+                  tier={tournament.user_tier.toLowerCase() as "basic" | "pro"}
+                  isLoading={settingsLoading}
+                  onUpdate={handleSettingsUpdate}
+                  onConfirm={handleSettingsConfirm}
+                />
+              )}
+
+            {/* Upgrade prompt for FREE tier */}
+            {tournament?.user_tier?.toLowerCase() === "free" && (
+              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                <h3 className="text-white font-semibold mb-2">Agent Controls</h3>
+                <p className="text-slate-400 text-sm mb-3">
+                  Upgrade to 0.1 SOL tier to adjust your agent&apos;s strategy in real-time.
+                </p>
+                <p className="text-xs text-slate-500">
+                  BASIC and PRO tier agents can adjust aggression and tightness during play.
+                </p>
               </div>
             )}
 

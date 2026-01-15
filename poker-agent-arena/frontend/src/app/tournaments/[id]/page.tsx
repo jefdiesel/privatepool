@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useTournament } from "@/hooks/useTournament";
 import { useWalletStore } from "@/stores/walletStore";
-import { api, RegistrationRequest, AgentSliders } from "@/lib/api";
+import { api, RegistrationRequest } from "@/lib/api";
 
 type Tier = "free" | "basic" | "pro";
 
@@ -15,12 +15,12 @@ const TIER_INFO = {
   basic: {
     name: "BASIC",
     cost: "0.1 SOL",
-    features: ["Base AI Engine", "Strategy Sliders"],
+    features: ["Base AI Engine", "Real-Time Slider Controls"],
   },
   pro: {
     name: "PRO",
     cost: "1 SOL",
-    features: ["Base AI Engine", "Strategy Sliders", "Custom Strategy Prompt"],
+    features: ["Base AI Engine", "Real-Time Slider Controls", "Custom Strategy Prompt"],
   },
 };
 
@@ -59,36 +59,6 @@ function getStatusBadge(status: string) {
   }
 }
 
-function SliderInput({
-  label,
-  value,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div>
-      <div className="flex justify-between mb-1">
-        <label className="text-slate-400 text-sm">{label}</label>
-        <span className="text-white text-sm">{value}</span>
-      </div>
-      <input
-        type="range"
-        min="0"
-        max="100"
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        disabled={disabled}
-        className="w-full accent-accent-gold"
-      />
-    </div>
-  );
-}
-
 export default function TournamentDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -100,12 +70,6 @@ export default function TournamentDetailPage() {
   // Registration form state
   const [selectedTier, setSelectedTier] = useState<Tier>("free");
   const [agentName, setAgentName] = useState("");
-  const [sliders, setSliders] = useState<AgentSliders>({
-    aggression: 50,
-    bluff_frequency: 30,
-    tightness: 50,
-    position_awareness: 70,
-  });
   const [customPrompt, setCustomPrompt] = useState("");
   const [acceptTos, setAcceptTos] = useState(false);
   const [confirmJurisdiction, setConfirmJurisdiction] = useState(false);
@@ -137,7 +101,7 @@ export default function TournamentDetailPage() {
         tier: selectedTier,
         agent: {
           name: agentName.trim(),
-          sliders: selectedTier !== "free" ? sliders : undefined,
+          // Note: Sliders are now controlled via live settings during the tournament
           custom_prompt: selectedTier === "pro" ? customPrompt : undefined,
         },
         accept_tos: acceptTos,
@@ -417,30 +381,16 @@ export default function TournamentDetailPage() {
                       />
                     </div>
 
-                    {/* Sliders (BASIC and PRO) */}
+                    {/* Real-Time Controls Note (BASIC and PRO) */}
                     {selectedTier !== "free" && (
-                      <div className="space-y-3">
-                        <p className="text-slate-400 text-sm">Strategy Sliders</p>
-                        <SliderInput
-                          label="Aggression"
-                          value={sliders.aggression}
-                          onChange={(v) => setSliders({ ...sliders, aggression: v })}
-                        />
-                        <SliderInput
-                          label="Bluff Frequency"
-                          value={sliders.bluff_frequency}
-                          onChange={(v) => setSliders({ ...sliders, bluff_frequency: v })}
-                        />
-                        <SliderInput
-                          label="Tightness"
-                          value={sliders.tightness}
-                          onChange={(v) => setSliders({ ...sliders, tightness: v })}
-                        />
-                        <SliderInput
-                          label="Position Awareness"
-                          value={sliders.position_awareness}
-                          onChange={(v) => setSliders({ ...sliders, position_awareness: v })}
-                        />
+                      <div className="bg-slate-700/50 rounded-lg p-3">
+                        <p className="text-slate-300 text-sm font-medium mb-1">
+                          Real-Time Slider Controls
+                        </p>
+                        <p className="text-slate-400 text-xs">
+                          Adjust your agent&apos;s aggression and tightness during live tournament play.
+                          Settings default to balanced (5/10) at tournament start.
+                        </p>
                       </div>
                     )}
 
