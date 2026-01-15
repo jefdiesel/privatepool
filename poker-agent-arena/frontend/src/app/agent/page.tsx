@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWalletStore } from "@/stores/walletStore";
+import { useOnboardingStore } from "@/stores/onboardingStore";
 
 export default function AgentPage() {
+  const router = useRouter();
   const { connected, signMessage } = useWallet();
   const {
     isAuthenticated,
@@ -17,12 +20,25 @@ export default function AgentPage() {
     updateAgentConfig,
     error,
     clearError,
+    isAuthenticating,
   } = useWalletStore();
+  const { isOnboardingComplete, selectedTier } = useOnboardingStore();
 
+  const [mounted, setMounted] = useState(false);
   const [name, setName] = useState("");
-  const [imageUri, setImageUri] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Redirect to onboarding if not complete
+  useEffect(() => {
+    if (mounted && !isOnboardingComplete) {
+      router.push('/onboarding');
+    }
+  }, [mounted, isOnboardingComplete, router]);
 
   // Load data on auth
   useEffect(() => {
@@ -36,7 +52,6 @@ export default function AgentPage() {
   useEffect(() => {
     if (agentConfig) {
       setName(agentConfig.name || "");
-      setImageUri(agentConfig.image_uri || "");
     }
   }, [agentConfig]);
 
@@ -53,7 +68,6 @@ export default function AgentPage() {
     try {
       await updateAgentConfig({
         name: name || undefined,
-        image_uri: imageUri || undefined,
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -64,15 +78,17 @@ export default function AgentPage() {
     }
   };
 
+  if (!mounted) return null;
+
   if (!connected) {
     return (
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-md mx-auto text-center">
-          <h1 className="text-3xl font-bold text-white mb-4">My Agent</h1>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-white mb-4">MY AGENT</h1>
           <p className="text-slate-400 mb-8">
             Connect your wallet to view and configure your agent.
           </p>
-          <WalletMultiButton className="!bg-felt hover:!bg-felt-light !rounded-lg" />
+          <WalletMultiButton className="!bg-red-500 hover:!bg-red-600 !rounded-lg" />
         </div>
       </div>
     );
@@ -80,174 +96,173 @@ export default function AgentPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-md mx-auto text-center">
-          <h1 className="text-3xl font-bold text-white mb-4">My Agent</h1>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-white mb-4">MY AGENT</h1>
           <p className="text-slate-400 mb-8">
             Sign a message to authenticate and access your agent configuration.
           </p>
           <button
             onClick={handleAuthenticate}
-            className="bg-accent-gold text-black font-semibold px-6 py-3 rounded-lg hover:bg-yellow-400 transition-colors"
+            disabled={isAuthenticating}
+            className="bg-red-500 text-white font-semibold px-6 py-3 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
           >
-            Authenticate
+            {isAuthenticating ? "Signing..." : "Authenticate"}
           </button>
         </div>
       </div>
     );
   }
 
+  const displayTier = profile?.agent_tier?.toUpperCase() || selectedTier || "FREE";
+
   return (
-    <div className="container mx-auto px-4 py-12">
-      <h1 className="text-3xl font-bold text-white mb-8">My Agent</h1>
-
-      <div className="grid lg:grid-cols-2 gap-8">
-        {/* Agent Configuration */}
-        <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-xl font-semibold text-white mb-6">
-            Agent Configuration
-          </h2>
-
-          {!agentConfig ? (
-            <div className="text-center py-8">
-              <p className="text-slate-400 mb-4">
-                No agent configuration found.
-              </p>
-              <p className="text-slate-500 text-sm">
-                Register for a tournament to create your first agent.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Name */}
-              <div>
-                <label className="block text-slate-400 text-sm mb-2">
-                  Agent Name
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="My Poker Agent"
-                  maxLength={32}
-                  className="w-full bg-slate-700 text-white rounded-lg px-4 py-3 border border-slate-600 focus:border-accent-gold focus:outline-none"
-                />
-              </div>
-
+    <div className="min-h-screen bg-black">
+      <div className="container mx-auto px-4 py-8">
+        {/* Agent Profile Card */}
+        <div className="max-w-md mx-auto">
+          {/* Avatar Section */}
+          <div className="border border-red-500/20 rounded-lg p-6 bg-slate-950/50 mb-6">
+            <div className="flex flex-col items-center">
               {/* Avatar */}
-              <div>
-                <label className="block text-slate-400 text-sm mb-2">
-                  Avatar URL
-                </label>
-                <input
-                  type="text"
-                  value={imageUri}
-                  onChange={(e) => setImageUri(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-slate-700 text-white rounded-lg px-4 py-3 border border-slate-600 focus:border-accent-gold focus:outline-none"
-                />
+              <div className="w-24 h-24 rounded-full border-2 border-red-500/50 flex items-center justify-center bg-slate-900 mb-4 overflow-hidden">
+                {agentConfig?.image_uri ? (
+                  <img
+                    src={agentConfig.image_uri}
+                    alt="Agent"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <svg className="w-10 h-10 text-red-500/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
+                  </svg>
+                )}
               </div>
 
-              {/* Real-time controls note */}
-              <div className="bg-slate-700/50 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-white mb-2">
-                  Real-Time Strategy Controls
-                </h3>
-                <p className="text-slate-400 text-xs">
-                  BASIC and PRO tier agents can adjust aggression and tightness
-                  sliders in real-time during live tournament play. Controls are
-                  available in the live tournament view.
-                </p>
-              </div>
+              {/* Tier Badge */}
+              <span className={`
+                px-3 py-1 text-xs font-bold rounded-full mb-4
+                ${displayTier === 'FREE' ? 'bg-slate-700 text-slate-300' : ''}
+                ${displayTier === 'BASIC' ? 'bg-red-500 text-white' : ''}
+                ${displayTier === 'PRO' ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white' : ''}
+              `}>
+                {displayTier}
+              </span>
 
-              {/* Custom Prompt note */}
-              <div className="pt-4 border-t border-slate-700">
-                <p className="text-slate-400 text-sm">
-                  Custom strategy prompts can only be set during tournament
-                  registration (PRO tier).
-                </p>
-              </div>
-
-              {error && (
-                <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3">
-                  <p className="text-red-400 text-sm">{error}</p>
-                </div>
-              )}
-
-              {saveSuccess && (
-                <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-3">
-                  <p className="text-green-400 text-sm">Configuration saved!</p>
-                </div>
-              )}
-
+              {/* Upgrade Button */}
               <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="w-full bg-felt text-white font-semibold py-3 rounded-lg hover:bg-felt-light transition-colors disabled:opacity-50"
+                onClick={() => router.push('/upgrade')}
+                className="bg-red-500 hover:bg-red-600 text-white font-medium px-6 py-2 rounded transition-colors text-sm"
               >
-                {isSaving ? "Saving..." : "Save Configuration"}
+                upgrade agent
               </button>
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Stats */}
-        <div className="space-y-8">
-          {/* Lifetime Stats */}
-          <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
-            <h2 className="text-xl font-semibold text-white mb-6">
-              Lifetime Stats
-            </h2>
+          {/* Stats List */}
+          <div className="border border-red-500/20 rounded-lg p-6 bg-slate-950/50 mb-6">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                <span className="text-slate-400 text-sm">wins tip 1</span>
+                <span className="text-white font-medium">{profile?.tournaments_won ?? 0}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                <span className="text-slate-400 text-sm">wins tip 2</span>
+                <span className="text-white font-medium">-</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                <span className="text-slate-400 text-sm">wins tip 3</span>
+                <span className="text-white font-medium">-</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                <span className="text-slate-400 text-sm">wins tip 4</span>
+                <span className="text-white font-medium">-</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                <span className="text-slate-400 text-sm">wins tip 5</span>
+                <span className="text-white font-medium">-</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                <span className="text-slate-400 text-sm">wins tip 6</span>
+                <span className="text-white font-medium">-</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                <span className="text-slate-400 text-sm">wins tip 7</span>
+                <span className="text-white font-medium">-</span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-slate-400 text-sm">wins tip 8</span>
+                <span className="text-white font-medium">-</span>
+              </div>
+            </div>
+          </div>
 
+          {/* Performance Data */}
+          <div className="border border-red-500/20 rounded-lg p-6 bg-slate-950/50">
+            <h3 className="text-white font-medium mb-4">performance data</h3>
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-700/50 rounded-lg p-4">
-                <p className="text-slate-400 text-sm">Tournaments</p>
-                <p className="text-2xl font-bold text-white">
-                  {profile?.tournaments_played ?? 0}
-                </p>
+              <div className="bg-slate-900/50 rounded p-3">
+                <p className="text-slate-500 text-xs mb-1">Tournaments</p>
+                <p className="text-white font-bold text-lg">{profile?.tournaments_played ?? 0}</p>
               </div>
-              <div className="bg-slate-700/50 rounded-lg p-4">
-                <p className="text-slate-400 text-sm">Wins</p>
-                <p className="text-2xl font-bold text-white">
-                  {profile?.tournaments_won ?? 0}
-                </p>
+              <div className="bg-slate-900/50 rounded p-3">
+                <p className="text-slate-500 text-xs mb-1">Total POINTS</p>
+                <p className="text-red-500 font-bold text-lg">{(profile?.total_points ?? 0).toLocaleString()}</p>
               </div>
-              <div className="bg-slate-700/50 rounded-lg p-4">
-                <p className="text-slate-400 text-sm">Total POINTS</p>
-                <p className="text-2xl font-bold text-accent-gold">
-                  {(profile?.total_points ?? 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-slate-700/50 rounded-lg p-4">
-                <p className="text-slate-400 text-sm">Best Finish</p>
-                <p className="text-2xl font-bold text-white">
+              <div className="bg-slate-900/50 rounded p-3">
+                <p className="text-slate-500 text-xs mb-1">Best Finish</p>
+                <p className="text-white font-bold text-lg">
                   {profile?.best_finish
-                    ? profile.best_finish === 1
-                      ? "1st"
-                      : profile.best_finish === 2
-                      ? "2nd"
-                      : profile.best_finish === 3
-                      ? "3rd"
-                      : `${profile.best_finish}th`
+                    ? profile.best_finish === 1 ? "1st"
+                    : profile.best_finish === 2 ? "2nd"
+                    : profile.best_finish === 3 ? "3rd"
+                    : `${profile.best_finish}th`
+                    : "-"}
+                </p>
+              </div>
+              <div className="bg-slate-900/50 rounded p-3">
+                <p className="text-slate-500 text-xs mb-1">Win Rate</p>
+                <p className="text-white font-bold text-lg">
+                  {profile?.tournaments_played
+                    ? `${Math.round((profile.tournaments_won / profile.tournaments_played) * 100)}%`
                     : "-"}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Tier Info */}
-          <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
-            <h2 className="text-xl font-semibold text-white mb-6">
-              Current Tier
-            </h2>
+          {/* Agent Name Edit */}
+          <div className="border border-red-500/20 rounded-lg p-6 bg-slate-950/50 mt-6">
+            <h3 className="text-white font-medium mb-4">agent settings</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-slate-400 text-sm mb-2">Agent Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter agent name"
+                  maxLength={32}
+                  className="w-full bg-slate-900 border border-red-500/30 rounded px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-red-500 transition-colors"
+                />
+              </div>
 
-            <div className="text-center py-4">
-              <span className="inline-block px-4 py-2 bg-accent-gold/20 text-accent-gold rounded-full font-semibold text-lg">
-                {profile?.agent_tier?.toUpperCase() || "FREE"}
-              </span>
-              <p className="text-slate-400 text-sm mt-4">
-                Tier is set per tournament registration
-              </p>
+              {error && (
+                <p className="text-red-400 text-sm">{error}</p>
+              )}
+
+              {saveSuccess && (
+                <p className="text-green-400 text-sm">Saved!</p>
+              )}
+
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 rounded transition-colors disabled:opacity-50"
+              >
+                {isSaving ? "Saving..." : "Save"}
+              </button>
             </div>
           </div>
         </div>
