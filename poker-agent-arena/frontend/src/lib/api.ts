@@ -48,18 +48,22 @@ export interface PayoutEntry {
   points: number;
 }
 
-export interface AgentSliders {
-  aggression: number;
-  bluff_frequency: number;
-  tightness: number;
-  position_awareness: number;
-}
-
 export interface AgentConfig {
   name: string;
   image_uri?: string | null;
-  sliders?: AgentSliders | null;
   custom_prompt?: string | null;
+}
+
+export interface LiveSettingsResponse {
+  tournament_id: string;
+  wallet: string;
+  active_aggression: number;
+  active_tightness: number;
+  pending_aggression: number | null;
+  pending_tightness: number | null;
+  confirmed_aggression: number | null;
+  confirmed_tightness: number | null;
+  confirmed_at: string | null;
 }
 
 export interface RegistrationRequest {
@@ -235,6 +239,23 @@ export const api = {
       apiFetch<{ status: string }>('/api/agent', {
         method: 'PUT',
         body: JSON.stringify(data),
+      }),
+  },
+
+  // Live Settings (real-time slider control during tournaments)
+  liveSettings: {
+    get: (tournamentId: string) =>
+      apiFetch<LiveSettingsResponse>(`/api/tournaments/${tournamentId}/live-settings`),
+
+    update: (tournamentId: string, aggression: number, tightness: number) =>
+      apiFetch<LiveSettingsResponse>(`/api/tournaments/${tournamentId}/live-settings`, {
+        method: 'PUT',
+        body: JSON.stringify({ aggression, tightness }),
+      }),
+
+    confirm: (tournamentId: string) =>
+      apiFetch<LiveSettingsResponse>(`/api/tournaments/${tournamentId}/live-settings/confirm`, {
+        method: 'POST',
       }),
   },
 

@@ -123,6 +123,22 @@ export interface DecisionStartEvent {
   pot: number;
 }
 
+export interface SettingsConfirmedEvent {
+  tournament_id: string;
+  wallet: string;
+  aggression: number;
+  tightness: number;
+  message: string;
+}
+
+export interface SettingsAppliedEvent {
+  tournament_id: string;
+  wallet: string;
+  aggression: number;
+  tightness: number;
+  message: string;
+}
+
 // Event callback types
 export interface SocketEventCallbacks {
   onConnect?: () => void;
@@ -145,6 +161,10 @@ export interface SocketEventCallbacks {
   onHandAction?: (event: HandActionEvent) => void;
   onHandShowdown?: (event: HandShowdownEvent) => void;
   onDecisionStart?: (event: DecisionStartEvent) => void;
+
+  // Live settings events
+  onSettingsConfirmed?: (event: SettingsConfirmedEvent) => void;
+  onSettingsApplied?: (event: SettingsAppliedEvent) => void;
 }
 
 class SocketClient {
@@ -246,6 +266,15 @@ class SocketClient {
 
     this.socket.on('decision:start', (data) => {
       this.callbacks.onDecisionStart?.(data);
+    });
+
+    // Live settings events
+    this.socket.on('settings:confirmed', (data) => {
+      this.callbacks.onSettingsConfirmed?.(data);
+    });
+
+    this.socket.on('settings:applied', (data) => {
+      this.callbacks.onSettingsApplied?.(data);
     });
   }
 

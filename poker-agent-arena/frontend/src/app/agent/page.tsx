@@ -4,37 +4,6 @@ import { useState, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWalletStore } from "@/stores/walletStore";
-import { AgentSliders } from "@/lib/api";
-
-function SliderInput({
-  label,
-  value,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div>
-      <div className="flex justify-between text-sm mb-1">
-        <span className="text-slate-400">{label}</span>
-        <span className="text-white">{value}</span>
-      </div>
-      <input
-        type="range"
-        min="0"
-        max="100"
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        disabled={disabled}
-        className="w-full accent-accent-gold disabled:opacity-50"
-      />
-    </div>
-  );
-}
 
 export default function AgentPage() {
   const { connected, signMessage } = useWallet();
@@ -52,12 +21,6 @@ export default function AgentPage() {
 
   const [name, setName] = useState("");
   const [imageUri, setImageUri] = useState("");
-  const [sliders, setSliders] = useState<AgentSliders>({
-    aggression: 50,
-    bluff_frequency: 30,
-    tightness: 50,
-    position_awareness: 70,
-  });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -74,9 +37,6 @@ export default function AgentPage() {
     if (agentConfig) {
       setName(agentConfig.name || "");
       setImageUri(agentConfig.image_uri || "");
-      if (agentConfig.sliders) {
-        setSliders(agentConfig.sliders);
-      }
     }
   }, [agentConfig]);
 
@@ -94,7 +54,6 @@ export default function AgentPage() {
       await updateAgentConfig({
         name: name || undefined,
         image_uri: imageUri || undefined,
-        sliders,
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -189,37 +148,16 @@ export default function AgentPage() {
                 />
               </div>
 
-              {/* Sliders */}
-              <div className="pt-4 border-t border-slate-700">
-                <h3 className="text-lg font-medium text-white mb-4">
-                  Strategy Sliders
-                  <span className="text-slate-400 text-sm ml-2">
-                    (BASIC & PRO tiers)
-                  </span>
+              {/* Real-time controls note */}
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-white mb-2">
+                  Real-Time Strategy Controls
                 </h3>
-
-                <div className="space-y-4">
-                  <SliderInput
-                    label="Aggression"
-                    value={sliders.aggression}
-                    onChange={(v) => setSliders({ ...sliders, aggression: v })}
-                  />
-                  <SliderInput
-                    label="Bluff Frequency"
-                    value={sliders.bluff_frequency}
-                    onChange={(v) => setSliders({ ...sliders, bluff_frequency: v })}
-                  />
-                  <SliderInput
-                    label="Tightness"
-                    value={sliders.tightness}
-                    onChange={(v) => setSliders({ ...sliders, tightness: v })}
-                  />
-                  <SliderInput
-                    label="Position Awareness"
-                    value={sliders.position_awareness}
-                    onChange={(v) => setSliders({ ...sliders, position_awareness: v })}
-                  />
-                </div>
+                <p className="text-slate-400 text-xs">
+                  BASIC and PRO tier agents can adjust aggression and tightness
+                  sliders in real-time during live tournament play. Controls are
+                  available in the live tournament view.
+                </p>
               </div>
 
               {/* Custom Prompt note */}

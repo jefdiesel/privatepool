@@ -418,3 +418,56 @@ async def emit_decision_start(
             "pot": pot,
         },
     )
+
+
+# Live settings event emitters
+
+
+async def emit_settings_confirmed(
+    tournament_id: str,
+    wallet: str,
+    aggression: int,
+    tightness: int,
+) -> None:
+    """Emit that a player's settings have been confirmed.
+
+    Sent to the specific user to confirm their settings are queued
+    and will take effect at the start of the next hand.
+    """
+    manager = get_socket_manager()
+    await manager.send_to_user(
+        wallet,
+        "settings:confirmed",
+        {
+            "tournament_id": tournament_id,
+            "wallet": wallet,
+            "aggression": aggression,
+            "tightness": tightness,
+            "message": "Changes will take effect next hand",
+        },
+    )
+
+
+async def emit_settings_applied(
+    tournament_id: str,
+    wallet: str,
+    aggression: int,
+    tightness: int,
+) -> None:
+    """Emit that a player's confirmed settings have been applied.
+
+    Sent to the specific user at the start of a new hand when
+    their confirmed settings are moved to active settings.
+    """
+    manager = get_socket_manager()
+    await manager.send_to_user(
+        wallet,
+        "settings:applied",
+        {
+            "tournament_id": tournament_id,
+            "wallet": wallet,
+            "aggression": aggression,
+            "tightness": tightness,
+            "message": "Settings are now active",
+        },
+    )

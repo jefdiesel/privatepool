@@ -5,6 +5,7 @@ This module provides Claude-based poker decision making with:
 - Tiered customization (FREE, BASIC, PRO)
 - Budget tracking per tournament
 - Action parsing and validation
+- Real-time slider controls for BASIC/PRO tiers
 """
 
 from .base_prompt import BASE_AGENT_SYSTEM_PROMPT
@@ -12,8 +13,12 @@ from .context_builder import AgentSliders, AgentTier, build_custom_prompt
 from .game_state_formatter import format_game_state
 from .action_parser import parse_response, ActionParseError
 from .budget import BudgetTracker
-from .engine import AIDecisionEngine, Decision
-from .callback import create_decision_callback
+from .engine import AIDecisionEngine, AgentConfig, Decision
+from .callback import (
+    create_decision_callback,
+    TournamentAIIntegration,
+    LiveSettingsAIIntegration,
+)
 
 __all__ = [
     "BASE_AGENT_SYSTEM_PROMPT",
@@ -25,6 +30,9 @@ __all__ = [
     "ActionParseError",
     "BudgetTracker",
     "AIDecisionEngine",
+    "AgentConfig",
     "Decision",
     "create_decision_callback",
+    "TournamentAIIntegration",
+    "LiveSettingsAIIntegration",
 ]
