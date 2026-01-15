@@ -1,0 +1,33 @@
+run = "cd frontend && npm run dev"
+entrypoint = "frontend/src/app/page.tsx"
+
+[nix]
+channel = "stable-24_05"
+
+[env]
+PATH = "/home/runner/$REPL_SLUG/.config/npm/node_global/bin:/home/runner/$REPL_SLUG/node_modules/.bin:./node_modules/.bin"
+npm_config_prefix = "/home/runner/$REPL_SLUG/.config/npm/node_global"
+
+[packager]
+language = "nodejs"
+
+[packager.features]
+packageSearch = true
+guessImports = true
+enabledForHosting = false
+
+[languages]
+
+[languages.typescript]
+pattern = "**/{*.ts,*.tsx}"
+
+[languages.typescript.languageServer]
+start = "typescript-language-server --stdio"
+
+[deployment]
+deploymentTarget = "cloudrun"
+run = ["sh", "-c", "cd frontend && npm run build && npm run start"]
+
+[[ports]]
+localPort = 3000
+externalPort = 80
