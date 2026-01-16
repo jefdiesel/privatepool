@@ -45,6 +45,7 @@ poker-agent-arena/
 │   │   │   └── admin/page.tsx      # Admin dashboard
 │   │   ├── components/             # Reusable components
 │   │   │   ├── AppShell.tsx        # Main layout shell
+│   │   │   ├── WalletStateSync.tsx # Syncs wallet adapter → walletStore
 │   │   │   ├── SliderControl.tsx   # Strategy slider
 │   │   │   ├── SettingsPanel.tsx   # Live settings panel
 │   │   │   ├── poker/              # Poker-specific components
@@ -162,6 +163,12 @@ focus:border-red-500 focus:outline-none
 - Header with logo, navigation tabs, wallet button
 - Footer with branding
 
+### WalletStateSync (`components/WalletStateSync.tsx`)
+- **Critical component** - bridges Solana wallet adapter with internal state
+- Syncs `useWallet()` connection state to `walletStore`
+- Mounted in `providers.tsx` so it runs on every page
+- Without this, authentication will fail with "no wallet connected"
+
 ### Onboarding Home (`app/onboarding/page.tsx`)
 - VHS-style effects: scanlines, glitch animation, color shift
 - Animated logo display
@@ -218,9 +225,10 @@ interface WalletState {
   agentConfig: AgentConfig | null;
 }
 ```
-- Handles Solana wallet connection
+- Handles Solana wallet connection state
 - Message signing for authentication
 - JWT token management
+- **Important**: State is synced from Solana wallet adapter via `WalletStateSync` component
 
 ### tournamentStore (Zustand)
 ```typescript
@@ -392,7 +400,9 @@ When modifying files, be aware of these dependencies:
 | File | Depends On |
 |------|------------|
 | `app/*/page.tsx` | `stores/onboardingStore.ts` (route guards) |
+| `app/providers.tsx` | `WalletStateSync.tsx` (wallet state bridge) |
 | `AppShell.tsx` | `stores/onboardingStore.ts`, `WalletMultiButton` |
+| `WalletStateSync.tsx` | `@solana/wallet-adapter-react`, `stores/walletStore.ts` |
 | `SettingsPanel.tsx` | `SliderControl.tsx`, `stores/tournamentStore.ts` |
 | `app/tournaments/[id]/live/page.tsx` | `PokerTable`, `SettingsPanel`, `useSocket` |
 | `lib/api.ts` | Environment variables, `stores/walletStore.ts` |
@@ -409,4 +419,4 @@ For issues with:
 
 ---
 
-*Last updated: Generated from wireframe implementation*
+*Last updated: Added WalletStateSync fix for wallet authentication*
