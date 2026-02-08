@@ -5,26 +5,102 @@ Uses Claude (claude-sonnet-4-5-20250929) to make poker decisions with:
 - Timeout handling (5s normal, 10s all-in)
 - Budget enforcement
 - Decision logging
+- Circuit breaker for API protection
+- Comprehensive error recovery
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
-from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 import anthropic
 
+from .action_parser import ActionParseError, parse_response
 from .base_prompt import BASE_AGENT_SYSTEM_PROMPT
-from .context_builder import AgentTier, AgentSliders, build_custom_prompt
-from .game_state_formatter import format_game_state
-from .action_parser import parse_response, ActionParseError
 from .budget import BudgetTracker
-from .logging import DecisionLogger, DecisionLog
+from .context_builder import AgentSliders, AgentTier, build_custom_prompt
+from .game_state_formatter import format_game_state
+from .logging import DecisionLog, DecisionLogger
 
 from ..poker.betting import Action
 from ..poker.hand_controller import HandState
+
+logger = logging.getLogger(__name__)
+
+
+class CircuitState(Enum):
+    """Circuit breaker states."""
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, reject requests
+    HALF_OPEN = "half_open"  # Testing if service recovered
+
+
+@dataclass
+class CircuitBreaker:
+    """Circuit breaker for external service protection.
+
+    Prevents cascade failures by temporarily blocking requests
+    when the failure rate exceeds a threshold.
+    """
+
+    failure_threshold: int = 5  # Failures before opening
+    reset_timeout: float = 30.0  # Seconds before trying again
+    half_open_max_calls: int = 3  # Calls allowed in half-open state
+
+    state: CircuitState = field(default=CircuitState.CLOSED, init=False)
+    failure_count: int = field(default=0, init=False)
+    last_failure_time: float = field(default=0.0, init=False)
+    half_open_calls: int = field(default=0, init=False)
+
+    def can_execute(self) -> bool:
+        """Check if request is allowed through circuit breaker."""
+        now = time.time()
+
+        if self.state == CircuitState.CLOSED:
+            return True
+
+        if self.state == CircuitState.OPEN:
+            if now - self.last_failure_time >= self.reset_timeout:
+                self.state = CircuitState.HALF_OPEN
+                self.half_open_calls = 0
+                logger.info("Circuit breaker transitioning to half-open state")
+                return True
+            return False
+
+        # HALF_OPEN state
+        if self.half_open_calls < self.half_open_max_calls:
+            self.half_open_calls += 1
+            return True
+        return False
+
+    def record_success(self) -> None:
+        """Record successful call."""
+        if self.state == CircuitState.HALF_OPEN:
+            self.state = CircuitState.CLOSED
+            self.failure_count = 0
+            logger.info("Circuit breaker closed after successful calls")
+        elif self.state == CircuitState.CLOSED:
+            self.failure_count = 0
+
+    def record_failure(self) -> None:
+        """Record failed call."""
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+
+        if self.state == CircuitState.HALF_OPEN:
+            self.state = CircuitState.OPEN
+            logger.warning("Circuit breaker reopened after failure in half-open state")
+        elif self.failure_count >= self.failure_threshold:
+            self.state = CircuitState.OPEN
+            logger.warning(
+                f"Circuit breaker opened after {self.failure_count} failures"
+            )
 
 
 @dataclass
@@ -94,22 +170,25 @@ class AIDecisionEngine:
     - Compressed game state format
     - Budget tracking per tournament
     - Timeout handling with conservative fallback
+    - Circuit breaker for API protection
+    - Comprehensive error recovery with exponential backoff
     """
 
     DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
     DEFAULT_TIMEOUT_NORMAL = 5
     DEFAULT_TIMEOUT_ALLIN = 10
     MAX_RETRIES = 3
-    RETRY_DELAYS = [1, 2, 4]  # Exponential backoff
+    RETRY_DELAYS = [1.0, 2.0, 4.0]  # Exponential backoff
 
     def __init__(
         self,
         client: anthropic.AsyncAnthropic,
         budget_tracker: BudgetTracker,
-        decision_logger: Optional[DecisionLogger] = None,
+        decision_logger: DecisionLogger | None = None,
         model: str = DEFAULT_MODEL,
         timeout_normal: int = DEFAULT_TIMEOUT_NORMAL,
         timeout_allin: int = DEFAULT_TIMEOUT_ALLIN,
+        circuit_breaker: CircuitBreaker | None = None,
     ):
         """Initialize AI decision engine.
 
@@ -120,6 +199,7 @@ class AIDecisionEngine:
             model: Claude model to use
             timeout_normal: Timeout for normal decisions (seconds)
             timeout_allin: Timeout for all-in decisions (seconds)
+            circuit_breaker: Optional circuit breaker for API protection
         """
         self.client = client
         self.budget = budget_tracker
@@ -127,6 +207,7 @@ class AIDecisionEngine:
         self.model = model
         self.timeout_normal = timeout_normal
         self.timeout_allin = timeout_allin
+        self.circuit_breaker = circuit_breaker or CircuitBreaker()
 
     def _build_system_prompt(self, agent_config: AgentConfig) -> str:
         """Build full system prompt with customizations.
@@ -154,11 +235,11 @@ class AIDecisionEngine:
         hand_state: HandState,
         agent_config: AgentConfig,
         tournament_id: str,
-        hole_cards: List[str],
+        hole_cards: list[str],
         button_seat: int,
         ante: int = 0,
         hand_number: int = 0,
-        action_history: Optional[List[dict]] = None,
+        action_history: list[dict[str, Any]] | None = None,
         is_all_in_decision: bool = False,
     ) -> Decision:
         """Get a decision for the given game state.
@@ -180,8 +261,14 @@ class AIDecisionEngine:
         """
         start_time = time.time()
 
+        # Check circuit breaker
+        if not self.circuit_breaker.can_execute():
+            logger.warning(f"Circuit breaker open, using fallback for {wallet}")
+            return self._circuit_open_fallback(hand_state, wallet, start_time)
+
         # Check budget
         if not await self.budget.can_make_call(tournament_id):
+            logger.info(f"Budget exceeded for tournament {tournament_id}")
             return self._budget_exceeded_fallback(hand_state, wallet, start_time)
 
         # Build prompts
@@ -199,11 +286,13 @@ class AIDecisionEngine:
         # Determine timeout
         timeout = self.timeout_allin if is_all_in_decision else self.timeout_normal
 
-        # Call Claude with retries
+        # Call Claude with retries and error recovery
+        last_error: str | None = None
+
         for attempt in range(self.MAX_RETRIES):
             try:
                 response = await asyncio.wait_for(
-                    self._call_claude(system_prompt, user_prompt),
+                    self._call_claude(system_prompt, user_prompt, attempt),
                     timeout=timeout,
                 )
 
@@ -214,6 +303,9 @@ class AIDecisionEngine:
                     wallet=wallet,
                     start_time=start_time,
                 )
+
+                # Record success with circuit breaker
+                self.circuit_breaker.record_success()
 
                 # Record usage
                 await self.budget.record_usage(
@@ -236,44 +328,90 @@ class AIDecisionEngine:
                 return decision
 
             except asyncio.TimeoutError:
+                last_error = "timeout"
+                logger.warning(
+                    f"API timeout on attempt {attempt + 1}/{self.MAX_RETRIES} "
+                    f"for {wallet}"
+                )
                 if attempt == self.MAX_RETRIES - 1:
+                    self.circuit_breaker.record_failure()
                     return self._timeout_fallback(hand_state, wallet, start_time)
-                # Continue to retry
+                # Continue to retry with backoff
+                await asyncio.sleep(self.RETRY_DELAYS[attempt])
 
-            except anthropic.RateLimitError:
+            except anthropic.RateLimitError as e:
+                last_error = "rate_limit"
+                logger.warning(
+                    f"Rate limit hit on attempt {attempt + 1}/{self.MAX_RETRIES}: {e}"
+                )
                 if attempt < self.MAX_RETRIES - 1:
-                    await asyncio.sleep(self.RETRY_DELAYS[attempt])
+                    # Use longer backoff for rate limits
+                    wait_time = self.RETRY_DELAYS[attempt] * 2
+                    await asyncio.sleep(wait_time)
                 else:
+                    self.circuit_breaker.record_failure()
                     return self._error_fallback(
                         hand_state, wallet, start_time, "Rate limit exceeded"
                     )
 
-            except anthropic.APIError as e:
-                return self._error_fallback(
-                    hand_state, wallet, start_time, str(e)
-                )
+            except anthropic.APIConnectionError as e:
+                last_error = "connection_error"
+                logger.error(f"API connection error on attempt {attempt + 1}: {e}")
+                if attempt < self.MAX_RETRIES - 1:
+                    await asyncio.sleep(self.RETRY_DELAYS[attempt])
+                else:
+                    self.circuit_breaker.record_failure()
+                    return self._error_fallback(
+                        hand_state, wallet, start_time, "Connection error"
+                    )
 
+            except anthropic.APIStatusError as e:
+                last_error = f"api_error_{e.status_code}"
+                logger.error(f"API status error {e.status_code}: {e.message}")
+
+                # 5xx errors are retryable
+                if e.status_code >= 500 and attempt < self.MAX_RETRIES - 1:
+                    await asyncio.sleep(self.RETRY_DELAYS[attempt])
+                else:
+                    self.circuit_breaker.record_failure()
+                    return self._error_fallback(
+                        hand_state, wallet, start_time, f"API error: {e.status_code}"
+                    )
+
+            except anthropic.APIError as e:
+                last_error = str(e)
+                logger.error(f"Unexpected API error: {e}")
+                self.circuit_breaker.record_failure()
+                return self._error_fallback(hand_state, wallet, start_time, str(e))
+
+        self.circuit_breaker.record_failure()
         return self._error_fallback(
-            hand_state, wallet, start_time, "Max retries exceeded"
+            hand_state, wallet, start_time, last_error or "Max retries exceeded"
         )
 
     async def _call_claude(
         self,
         system_prompt: str,
         user_prompt: str,
+        attempt: int = 0,
     ) -> anthropic.types.Message:
         """Call Claude API with prompt caching.
 
         Args:
             system_prompt: Full system prompt
             user_prompt: Game state prompt
+            attempt: Current retry attempt (used for temperature adjustment)
 
         Returns:
             Claude API response
         """
+        # Use lower temperature on retries for more consistent output
+        temperature = 0.3 if attempt == 0 else 0.0
+
         response = await self.client.messages.create(
             model=self.model,
             max_tokens=100,  # Responses are short JSON
+            temperature=temperature,
             system=[
                 {
                     "type": "text",
@@ -403,6 +541,23 @@ class AIDecisionEngine:
             reasoning=f"Error: {error}",
             decision_time_ms=decision_time_ms,
             error=error,
+        )
+
+    def _circuit_open_fallback(
+        self,
+        hand_state: HandState,
+        wallet: str,
+        start_time: float,
+    ) -> Decision:
+        """Fallback when circuit breaker is open."""
+        decision_time_ms = int((time.time() - start_time) * 1000)
+        action = self._get_conservative_action(hand_state, wallet)
+
+        return Decision(
+            action=action,
+            reasoning="Circuit breaker open - API temporarily unavailable",
+            decision_time_ms=decision_time_ms,
+            error="circuit_breaker_open",
         )
 
     async def _log_decision(

@@ -67,7 +67,31 @@ async def check_db_connection() -> bool:
 
     try:
         async with _engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            from sqlalchemy import text
+
+            await conn.execute(text("SELECT 1"))
         return True
     except Exception:
         return False
+
+
+async def get_db_pool_status() -> dict | None:
+    """Get database connection pool status.
+
+    Returns:
+        Dictionary with pool metrics or None if unavailable
+    """
+    if _engine is None:
+        return None
+
+    try:
+        pool = _engine.pool
+        return {
+            "pool_size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+            "invalid": pool.invalidatedcount() if hasattr(pool, "invalidatedcount") else 0,
+        }
+    except Exception:
+        return None

@@ -169,7 +169,7 @@ export default function TierSelection() {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-8">
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Choose Your Bot Tier</h2>
-          <p className="text-slate-400">Select a tier to determine your agent's capabilities</p>
+          <p className="text-slate-400">Select a tier to determine your agent&apos;s capabilities</p>
         </div>
 
         {/* Tier Cards */}

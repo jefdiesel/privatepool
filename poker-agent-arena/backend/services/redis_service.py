@@ -37,6 +37,14 @@ def get_redis() -> redis.Redis:
     return _redis_client
 
 
+async def get_redis_client() -> redis.Redis | None:
+    """Get Redis client, returning None if not available.
+
+    Use this for optional Redis operations where fallback behavior is acceptable.
+    """
+    return _redis_client
+
+
 async def check_redis_connection() -> bool:
     """Check if Redis connection is healthy."""
     if _redis_client is None:
@@ -47,6 +55,29 @@ async def check_redis_connection() -> bool:
         return True
     except Exception:
         return False
+
+
+async def get_redis_info() -> dict | None:
+    """Get Redis server info for health monitoring.
+
+    Returns:
+        Dictionary with Redis metrics or None if unavailable
+    """
+    if _redis_client is None:
+        return None
+
+    try:
+        info = await _redis_client.info()
+        return {
+            "connected_clients": info.get("connected_clients", 0),
+            "used_memory": info.get("used_memory", 0),
+            "used_memory_human": info.get("used_memory_human", "unknown"),
+            "total_connections_received": info.get("total_connections_received", 0),
+            "total_commands_processed": info.get("total_commands_processed", 0),
+            "uptime_in_seconds": info.get("uptime_in_seconds", 0),
+        }
+    except Exception:
+        return None
 
 
 class RedisService:

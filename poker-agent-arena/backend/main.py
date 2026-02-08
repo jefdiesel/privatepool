@@ -17,17 +17,33 @@ from api.routes import (
     tournaments_router,
 )
 from config import get_settings
+from core.logging import setup_logging
 from db.database import close_db, init_db
+from middleware import (
+    CorrelationIdMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 from services.redis_service import close_redis, init_redis
 from services.solana_service import close_solana, init_solana
 from websocket.events import register_events
 from websocket.manager import create_socket_server
+
+# API version prefix
+API_VERSION = "v1"
+API_PREFIX = f"/api/{API_VERSION}"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup and shutdown."""
     settings = get_settings()
+
+    # Configure logging
+    setup_logging(
+        level="DEBUG" if settings.DEBUG else "INFO",
+        json_format=settings.is_production,
+    )
 
     # Startup
     await init_db(settings.DATABASE_URL)
@@ -123,6 +139,21 @@ See the WebSocket documentation for event specifications.
         },
     )
 
+    # Security headers middleware (outermost - runs first on response)
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        enable_hsts=settings.is_production,
+    )
+
+    # Correlation ID middleware (adds request tracing)
+    app.add_middleware(CorrelationIdMiddleware)
+
+    # Rate limiting middleware
+    app.add_middleware(
+        RateLimitMiddleware,
+        exclude_paths=["/api/health", "/api/docs", "/api/openapi.json", "/api/redoc"],
+    )
+
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -132,14 +163,25 @@ See the WebSocket documentation for event specifications.
         allow_headers=["*"],
     )
 
-    # Include routers
+    # Include routers with versioned prefix
+    # Health endpoint is unversioned for k8s compatibility
     app.include_router(health_router, prefix="/api/health", tags=["health"])
-    app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
-    app.include_router(tournaments_router, prefix="/api/tournaments", tags=["tournaments"])
-    app.include_router(live_settings_router, prefix="/api/tournaments", tags=["live-settings"])
-    app.include_router(agent_router, prefix="/api/agent", tags=["agent"])
-    app.include_router(leaderboard_router, prefix="/api/leaderboard", tags=["leaderboard"])
-    app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+
+    # Versioned API routes
+    app.include_router(auth_router, prefix=f"{API_PREFIX}/auth", tags=["auth"])
+    app.include_router(tournaments_router, prefix=f"{API_PREFIX}/tournaments", tags=["tournaments"])
+    app.include_router(live_settings_router, prefix=f"{API_PREFIX}/tournaments", tags=["live-settings"])
+    app.include_router(agent_router, prefix=f"{API_PREFIX}/agent", tags=["agent"])
+    app.include_router(leaderboard_router, prefix=f"{API_PREFIX}/leaderboard", tags=["leaderboard"])
+    app.include_router(admin_router, prefix=f"{API_PREFIX}/admin", tags=["admin"])
+
+    # Backward compatibility: also mount on /api for existing clients
+    app.include_router(auth_router, prefix="/api/auth", tags=["auth"], include_in_schema=False)
+    app.include_router(tournaments_router, prefix="/api/tournaments", tags=["tournaments"], include_in_schema=False)
+    app.include_router(live_settings_router, prefix="/api/tournaments", tags=["live-settings"], include_in_schema=False)
+    app.include_router(agent_router, prefix="/api/agent", tags=["agent"], include_in_schema=False)
+    app.include_router(leaderboard_router, prefix="/api/leaderboard", tags=["leaderboard"], include_in_schema=False)
+    app.include_router(admin_router, prefix="/api/admin", tags=["admin"], include_in_schema=False)
 
     return app
 

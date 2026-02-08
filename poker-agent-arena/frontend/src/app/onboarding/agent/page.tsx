@@ -74,7 +74,7 @@ export default function AgentSetup() {
       }
 
       // Update agent config with name
-      await updateAgentConfig({ agent_name: localName.trim() });
+      await updateAgentConfig({ name: localName.trim() });
 
       // Save to onboarding store and complete
       setAgentName(localName.trim());

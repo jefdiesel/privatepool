@@ -53,6 +53,22 @@ async def check_solana_connection() -> bool:
         return False
 
 
+async def get_solana_slot() -> int | None:
+    """Get current Solana slot for health monitoring.
+
+    Returns:
+        Current slot number or None if unavailable
+    """
+    if _solana_client is None:
+        return None
+
+    try:
+        result = await _solana_client.get_slot()
+        return result.value
+    except Exception:
+        return None
+
+
 class SolanaService:
     """High-level Solana operations for the poker arena."""
 

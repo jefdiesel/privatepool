@@ -88,6 +88,7 @@ export interface LeaderboardEntry {
   rank: number;
   wallet: string;
   agent_name: string | null;
+  image_uri: string | null;
   total_points: number;
   tournaments_played: number;
   tournaments_won: number;
